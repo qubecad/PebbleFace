@@ -7,11 +7,11 @@ enum {
 };
 
 enum {
-	CMD_UP = 0x01, CMD_DOWN = 0x02, CMD_SELECT = 0x03
+	CMD_UP = 0x01, CMD_DOWN = 0x02, CMD_SELECT = 0x03,INSTALL_OK=0x04,
 };
 
 enum {
-	RESULT_KEY = 0x01,
+	RESULT_KEY = 0x01,QUERY_KEY=0x02,
 };
 
 
@@ -34,8 +34,24 @@ static void app_send_failed(DictionaryIterator* failed, AppMessageResult reason,
 	// TODO: error handling
 }
 
+static void send_version(uint8_t ver) {
+	Tuplet value = TupletInteger(INSTALL_OK, ver);
+
+	DictionaryIterator *iter;
+	app_message_out_get(&iter);
+
+	if (iter == NULL)
+		return;
+
+	dict_write_tuplet(iter, &value);
+	dict_write_end(iter);
+
+	app_message_out_send();
+	app_message_out_release();
+}
+
 static void app_received_msg(DictionaryIterator* received, void* context) {
-	vibes_short_pulse();
+	
 
 	Tuple* result_tuple = dict_find(received, RESULT_KEY);
 
@@ -43,16 +59,30 @@ static void app_received_msg(DictionaryIterator* received, void* context) {
 		// TODO: handle invalid message
 
 	} else {
-
+	vibes_short_pulse();
 		strcpy(result, result_tuple->value->cstring);
+		
+		text_layer_set_text(&timeLayer, result);
+
+	}
+	
+	Tuple* query_tuple = dict_find(received, QUERY_KEY);
+
+	if (query_tuple == NULL) {
+		// TODO: handle invalid message
+
+	} else {
+
+		send_version(1);
+		
 
 	}
 
-	text_layer_set_text(&timeLayer, result);
+	
 
 }
 
-void my_in_drp_handler(void *context, AppMessageResult reason) {
+void app_received_failed(void *context, AppMessageResult reason) {
 	// incoming message dropped
 }
 
@@ -71,6 +101,11 @@ static void send_cmd(uint8_t cmd) {
 	app_message_out_send();
 	app_message_out_release();
 }
+
+
+
+
+
 
 void up_single_click_handler(ClickRecognizerRef recognizer, Window *window) {
 	(void) recognizer;
@@ -121,12 +156,13 @@ void handle_init(AppContextRef ctx) {
 	window_set_background_color(&window, GColorBlack);
 
 	text_layer_init(&timeLayer,
-			GRect(15, 15, 144 - 4 /* width */, 168 - 8 /* height */));
+			GRect(5, 5, 144 - 4 /* width */, 168 - 8 /* height */));
 	text_layer_set_text_color(&timeLayer, GColorWhite);
 	text_layer_set_background_color(&timeLayer, GColorClear);
+	
 	text_layer_set_font(&timeLayer,
 			fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-
+	text_layer_set_text(&timeLayer, "Press Select to take a picture");
 
 
 	layer_add_child(&window.layer, &timeLayer.layer);
@@ -149,7 +185,7 @@ void pbl_main(void *params) {
 				//.out_sent = app_received_msg,
 				//.out_failed = app_send_failed,
 				.in_received = app_received_msg,
-				.in_dropped =my_in_drp_handler,
+				.in_dropped =app_received_failed,
 
 			},
 		},
